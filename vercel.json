@@ -5,7 +5,7 @@
   "framework": "nextjs",
   "functions": {
     "app/api/tryon/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 120
     }
   }
 }

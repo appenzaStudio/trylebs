@@ -8,7 +8,7 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { Language, translations } from '@/lib/translations';
 
 export default function Home() {
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>('ar');
   const [personImage, setPersonImage] = useState<File | null>(null);
   const [clothingImage, setClothingImage] = useState<File | null>(null);
   const [personPreview, setPersonPreview] = useState<string>('');
@@ -99,13 +99,18 @@ export default function Home() {
   };
 
   return (
-    <div dir={isRTL ? 'rtl' : 'ltr'} className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+    <div dir={isRTL ? 'rtl' : 'ltr'} className="min-h-screen bg-gradient-to-br from-navy-50 via-teal-50 to-gold-50">
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Sparkles className="text-blue-600" size={32} />
-            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="TryLebs Logo"
+              className="h-12 w-12 sm:h-16 sm:w-16 object-contain"
+            />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-navy to-teal bg-clip-text text-transparent">
               {t.title}
             </h1>
           </div>
@@ -132,22 +137,22 @@ export default function Home() {
         {/* How It Works */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <div className="bg-white rounded-xl p-6 shadow-md text-center">
-            <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Upload className="text-blue-600" size={32} />
+            <div className="bg-navy-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Upload className="text-navy" size={32} />
             </div>
             <h3 className="text-xl font-bold mb-2">{t.step1}</h3>
             <p className="text-gray-600">{t.step1Desc}</p>
           </div>
           <div className="bg-white rounded-xl p-6 shadow-md text-center">
-            <div className="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ImageIcon className="text-purple-600" size={32} />
+            <div className="bg-teal-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <ImageIcon className="text-teal" size={32} />
             </div>
             <h3 className="text-xl font-bold mb-2">{t.step2}</h3>
             <p className="text-gray-600">{t.step2Desc}</p>
           </div>
           <div className="bg-white rounded-xl p-6 shadow-md text-center">
-            <div className="bg-pink-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="text-pink-600" size={32} />
+            <div className="bg-gold-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="text-gold" size={32} />
             </div>
             <h3 className="text-xl font-bold mb-2">{t.step3}</h3>
             <p className="text-gray-600">{t.step3Desc}</p>
@@ -196,7 +201,7 @@ export default function Home() {
             <button
               onClick={handleTryOn}
               disabled={!personImage || !clothingImage || isProcessing}
-              className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-bold text-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 flex items-center justify-center gap-2"
+              className="px-8 py-4 bg-gradient-to-r from-navy to-teal text-white rounded-lg font-bold text-lg hover:from-navy-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 flex items-center justify-center gap-2"
             >
               <Sparkles size={24} />
               {t.tryOn}
@@ -256,9 +261,17 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-gray-600">
-          <p>{t.footer}</p>
-          <p className="mt-2 text-sm">© 2024 TryLebs.ai - All rights reserved</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center">
+          <div className="flex justify-center mb-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="TryLebs Logo"
+              className="h-16 w-16 object-contain"
+            />
+          </div>
+          <p className="text-gray-600">{t.footer}</p>
+          <p className="mt-2 text-sm text-gray-500">© 2024 TryLebs.ai - All rights reserved</p>
         </div>
       </footer>
     </div>

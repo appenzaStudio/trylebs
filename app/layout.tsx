@@ -2,9 +2,14 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TryLebs.ai - Virtual Clothing Try-On",
-  description: "Try on clothes virtually using AI - The leading virtual try-on platform for the Middle East",
-  keywords: ["virtual try-on", "AI", "clothing", "fashion", "Middle East", "Lebanon"],
+  title: "TryLebs.ai - جرب الملابس افتراضياً | Virtual Clothing Try-On",
+  description: "جرب الملابس افتراضياً باستخدام الذكاء الاصطناعي - المنصة الرائدة للتجربة الافتراضية في الشرق الأوسط | Try on clothes virtually using AI",
+  keywords: ["virtual try-on", "AI", "clothing", "fashion", "Middle East", "Lebanon", "تجربة افتراضية", "ذكاء اصطناعي", "ملابس", "موضة"],
+  openGraph: {
+    title: "TryLebs.ai - جرب الملابس افتراضياً",
+    description: "جرب الملابس افتراضياً باستخدام الذكاء الاصطناعي",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -13,8 +18,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased">
+    <html lang="ar" dir="rtl">
+      <head>
+        <link rel="icon" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
+      </head>
+      <body className="antialiased font-arabic">
         {children}
       </body>
     </html>
