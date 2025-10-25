@@ -34,19 +34,16 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-secondary);
+  font-family: 'Cairo', var(--font-primary);
   font-size: var(--font-size-base);
   line-height: var(--line-height);
 }
 
-/* Arabic text should use Arabic fonts */
-:lang(ar) {
-  font-family: var(--font-primary);
-}
-
-/* English text should use sans-serif fonts */
-:lang(en) {
-  font-family: var(--font-secondary);
+/* Use Cairo for both Arabic and English text */
+:lang(ar),
+:lang(en),
+* {
+  font-family: 'Cairo', var(--font-primary);
 }
 
 @layer utilities {

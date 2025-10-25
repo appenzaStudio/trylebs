@@ -4,7 +4,11 @@
       "Bash(cat:*)",
       "Bash(npm install:*)",
       "Bash(npm run dev:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nImplement critical features and fix 504 timeout error\n\n## Critical Bug Fixes\n- Fix 504 Gateway Timeout by increasing maxDuration to 120s\n- Add retry logic with exponential backoff for API calls\n- Enhance error handling with specific error types\n- Add performance monitoring and detailed logging\n\n## Brand Implementation\n- Implement full brand design system (Navy, Gold, Teal colors)\n- Add Arabic-optimized typography (Cairo, Inter, Open Sans)\n- Apply brand colors across all UI components\n- Update gradients and visual elements\n\n## Arabic Language Support\n- Set Arabic as default language (lang=\"ar\")\n- Enable RTL layout (dir=\"rtl\")\n- Add bilingual SEO metadata\n- Configure font families for Arabic and English\n\n## Logo Integration\n- Add TryLebs logo to header with responsive sizing\n- Add logo to footer\n- Configure favicon and Apple touch icon\n- Logo features navy dress with gold accents\n\n## Documentation\n- Create comprehensive Claude.md file\n- Document all implementations and changes\n- Add deployment checklist\n- List known issues and next steps\n\nFiles Modified:\n- app/api/tryon/route.ts - Retry logic and error handling\n- app/globals.css - Brand colors and typography\n- app/layout.tsx - Arabic language, RTL, favicon\n- app/page.tsx - Logo integration, brand colors\n- tailwind.config.ts - Brand color palettes\n- vercel.json - Increased timeout to 120s\n- Claude.md - Complete project documentation\n- public/logo.png - TryLebs brand logo\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

@@ -16,6 +16,8 @@ export default function Home() {
   const [resultImage, setResultImage] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string>('');
+  const [processingStep, setProcessingStep] = useState<string>('');
+  const [estimatedTime, setEstimatedTime] = useState<number>(0);
 
   const t = translations[language];
   const isRTL = language === 'ar';
@@ -49,8 +51,38 @@ export default function Home() {
     setIsProcessing(true);
     setError('');
     setResultImage('');
+    setEstimatedTime(60); // Estimated 60 seconds
+
+    const steps = language === 'ar'
+      ? [
+          'جاري رفع الصور...',
+          'جاري الاتصال بخدمة الذكاء الاصطناعي...',
+          'جاري معالجة صورتك...',
+          'جاري تطبيق الملابس...',
+          'جاري إنشاء النتيجة النهائية...',
+          'تقريباً انتهينا...'
+        ]
+      : [
+          'Uploading images...',
+          'Connecting to AI service...',
+          'Processing your photo...',
+          'Applying clothing...',
+          'Generating final result...',
+          'Almost done...'
+        ];
+
+    let currentStep = 0;
+    const stepInterval = setInterval(() => {
+      if (currentStep < steps.length) {
+        setProcessingStep(steps[currentStep]);
+        currentStep++;
+        setEstimatedTime(prev => Math.max(0, prev - 10));
+      }
+    }, 10000); // Update every 10 seconds
 
     try {
+      setProcessingStep(steps[0]);
+
       const formData = new FormData();
       formData.append('person', personImage);
       formData.append('clothing', clothingImage);
@@ -67,10 +99,14 @@ export default function Home() {
       }
 
       setResultImage(data.image);
+      setProcessingStep(language === 'ar' ? 'تم بنجاح!' : 'Success!');
     } catch (err) {
       setError(err instanceof Error ? err.message : t.error);
     } finally {
+      clearInterval(stepInterval);
       setIsProcessing(false);
+      setProcessingStep('');
+      setEstimatedTime(0);
     }
   };
 
@@ -108,7 +144,7 @@ export default function Home() {
             <img
               src="/logo.png"
               alt="TryLebs Logo"
-              className="h-12 w-12 sm:h-16 sm:w-16 object-contain"
+              className="h-12 w-12 sm:h-16 sm:w-16 object-contain bg-white rounded-lg p-1"
             />
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-navy to-teal bg-clip-text text-transparent">
               {t.title}
@@ -229,6 +265,25 @@ export default function Home() {
         {isProcessing && (
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <LoadingSpinner text={t.processing} />
+            {processingStep && (
+              <div className="mt-6 text-center">
+                <p className="text-lg font-semibold text-navy mb-2">{processingStep}</p>
+                {estimatedTime > 0 && (
+                  <p className="text-sm text-gray-600">
+                    {language === 'ar'
+                      ? `الوقت المتبقي التقريبي: ${estimatedTime} ثانية`
+                      : `Estimated time remaining: ~${estimatedTime} seconds`
+                    }
+                  </p>
+                )}
+                <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-navy to-teal h-2 rounded-full transition-all duration-1000"
+                    style={{ width: `${Math.max(10, 100 - (estimatedTime / 60 * 100))}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -267,7 +322,7 @@ export default function Home() {
             <img
               src="/logo.png"
               alt="TryLebs Logo"
-              className="h-16 w-16 object-contain"
+              className="h-16 w-16 object-contain bg-white rounded-lg p-2"
             />
           </div>
           <p className="text-gray-600">{t.footer}</p>
