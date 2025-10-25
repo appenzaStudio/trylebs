@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Client } from '@gradio/client';
 
 export const maxDuration = 120; // Maximum duration for serverless function (increased from 60s)
 
-interface GradioResponse {
-  data: unknown;
-}
+const GRADIO_API_URL = 'https://kwai-kolors-kolors-virtual-try-on.hf.space';
 
 // Retry helper function with exponential backoff
 async function retryWithBackoff<T>(
@@ -61,140 +58,190 @@ export async function POST(request: NextRequest) {
     console.log(`[${requestId}]   - Person image: ${personImage.name} (${personImage.size} bytes, ${personImage.type})`);
     console.log(`[${requestId}]   - Clothing image: ${clothingImage.name} (${clothingImage.size} bytes, ${clothingImage.type})`);
 
-    // Convert files to the format expected by Gradio
-    console.log(`[${requestId}] Step 3: Converting images to ArrayBuffer...`);
-    const personBuffer = await personImage.arrayBuffer();
-    const clothingBuffer = await clothingImage.arrayBuffer();
+    // Step 1: Upload images to Gradio
+    console.log(`[${requestId}] Step 3: Uploading images to Gradio...`);
+    const uploadFormData = new FormData();
+    uploadFormData.append('files', personImage);
+    uploadFormData.append('files', clothingImage);
 
-    console.log(`[${requestId}] Step 4: Creating Blobs...`);
-    const personBlob = new Blob([personBuffer], { type: personImage.type });
-    const clothingBlob = new Blob([clothingBuffer], { type: clothingImage.type });
-    console.log(`[${requestId}]   - Person blob: ${personBlob.size} bytes`);
-    console.log(`[${requestId}]   - Clothing blob: ${clothingBlob.size} bytes`);
-
-    // Initialize Gradio client with retry logic
-    console.log(`[${requestId}] Step 5: Connecting to Gradio service...`);
-    const connectStart = Date.now();
-    const client = await retryWithBackoff(
+    const uploadResponse = await retryWithBackoff(
       async () => {
-        console.log(`[${requestId}]   - Attempting Gradio connection to Kwai-Kolors/Kolors-Virtual-Try-On...`);
-        const c = await Client.connect("Kwai-Kolors/Kolors-Virtual-Try-On");
-        console.log(`[${requestId}]   - Successfully connected to Gradio`);
+        console.log(`[${requestId}]   - Uploading to ${GRADIO_API_URL}/upload...`);
+        const resp = await fetch(`${GRADIO_API_URL}/upload`, {
+          method: 'POST',
+          body: uploadFormData,
+        });
 
-        // Log available endpoints to understand the API
-        console.log(`[${requestId}]   - Discovering available endpoints...`);
-        const endpoints = await c.view_api();
-        console.log(`[${requestId}]   - Available API endpoints:`, JSON.stringify(endpoints, null, 2));
+        if (!resp.ok) {
+          throw new Error(`Upload failed with status ${resp.status}`);
+        }
 
-        return c;
+        const data = await resp.json();
+        console.log(`[${requestId}]   - Upload response:`, JSON.stringify(data, null, 2));
+        return data as string[]; // Returns array of uploaded file paths
       },
       3,
       2000
     );
-    const connectDuration = Date.now() - connectStart;
-    console.log(`[${requestId}] Step 5 completed in ${connectDuration}ms`);
 
-    // Call the submit method with the images and retry logic
-    // The Gradio API uses a queue-based system, so we use submit() instead of predict()
-    console.log(`[${requestId}] Step 6: Sending images to AI model for processing...`);
-    const predictStart = Date.now();
-    const result = await retryWithBackoff(
+    if (!uploadResponse || uploadResponse.length < 2) {
+      throw new Error('Failed to upload images');
+    }
+
+    const personImagePath = uploadResponse[0];
+    const clothingImagePath = uploadResponse[1];
+    console.log(`[${requestId}]   - Person image path: ${personImagePath}`);
+    console.log(`[${requestId}]   - Clothing image path: ${clothingImagePath}`);
+
+    // Step 2: Join the queue
+    console.log(`[${requestId}] Step 4: Joining processing queue...`);
+    const sessionHash = `session_${requestId}_${Date.now()}`;
+    const fnIndex = 0; // The try-on function index
+
+    const queueJoinResponse = await retryWithBackoff(
       async () => {
-        console.log(`[${requestId}]   - Calling tryon function with submit API...`);
-        // The Kolors Virtual Try-On expects 4 parameters:
-        // 1. person_img (image)
-        // 2. garment_img (image)
-        // 3. seed (number, 0-999999)
-        // 4. randomize_seed (boolean)
+        console.log(`[${requestId}]   - Sending queue join request...`);
+        const resp = await fetch(`${GRADIO_API_URL}/queue/join?`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            data: [
+              personImagePath,      // Parameter 1: person_img
+              clothingImagePath,    // Parameter 2: garment_img
+              42,                   // Parameter 3: seed
+              false                 // Parameter 4: randomize_seed
+            ],
+            event_data: null,
+            fn_index: fnIndex,
+            session_hash: sessionHash,
+          }),
+        });
 
-        // Use submit() which returns a handle for queue-based processing
-        const handle = client.submit("/tryon", [
-          personBlob,      // Parameter 1: person_img
-          clothingBlob,    // Parameter 2: garment_img
-          42,              // Parameter 3: seed (fixed seed for consistency)
-          false            // Parameter 4: randomize_seed (false to use fixed seed)
-        ]);
-
-        console.log(`[${requestId}]   - Waiting for queue processing...`);
-
-        // Wait for the result using async iterator
-        let finalResult: GradioResponse | null = null;
-        for await (const message of handle) {
-          console.log(`[${requestId}]   - Queue message type: ${message.type}`);
-          if (message.type === 'data') {
-            finalResult = message as GradioResponse;
-            console.log(`[${requestId}]   - Received data from queue`);
-          } else if (message.type === 'status') {
-            console.log(`[${requestId}]   - Status update: ${JSON.stringify(message)}`);
-          }
+        if (!resp.ok) {
+          throw new Error(`Queue join failed with status ${resp.status}`);
         }
 
-        if (!finalResult) {
-          throw new Error('No data received from queue');
-        }
-
-        console.log(`[${requestId}]   - Prediction completed successfully`);
-        console.log(`[${requestId}]   - Response data structure:`, JSON.stringify(finalResult, null, 2));
-        return finalResult;
+        const data = await resp.json();
+        console.log(`[${requestId}]   - Queue join response:`, JSON.stringify(data, null, 2));
+        return data;
       },
       2,
       3000
     );
-    const predictDuration = Date.now() - predictStart;
-    console.log(`[${requestId}] Step 6 completed in ${predictDuration}ms`);
 
-    // Extract the result image URL
-    console.log(`[${requestId}] Step 7: Extracting result image URL...`);
-    if (result && result.data && Array.isArray(result.data) && result.data.length > 0) {
-      const resultImageUrl = result.data[0];
-      console.log(`[${requestId}]   - Result URL: ${resultImageUrl}`);
+    const eventId = queueJoinResponse.event_id;
+    console.log(`[${requestId}]   - Joined queue with event_id: ${eventId}`);
 
-      // Fetch the result image and convert to base64 with retry
-      console.log(`[${requestId}] Step 8: Fetching generated image...`);
-      const fetchStart = Date.now();
-      const imageResponse = await retryWithBackoff(
-        async () => {
-          console.log(`[${requestId}]   - Downloading image from: ${resultImageUrl}`);
-          const resp = await fetch(resultImageUrl as string);
-          console.log(`[${requestId}]   - Image fetch status: ${resp.status}`);
-          return resp;
-        },
-        3,
-        1000
-      );
-      const fetchDuration = Date.now() - fetchStart;
-      console.log(`[${requestId}] Step 8 completed in ${fetchDuration}ms`);
+    // Step 3: Poll the queue for results
+    console.log(`[${requestId}] Step 5: Polling for processing results...`);
+    const queueDataUrl = `${GRADIO_API_URL}/queue/data?session_hash=${sessionHash}`;
+    console.log(`[${requestId}]   - Polling URL: ${queueDataUrl}`);
 
-      console.log(`[${requestId}] Step 9: Converting to base64...`);
-      const imageBuffer = await imageResponse.arrayBuffer();
-      const base64Image = Buffer.from(imageBuffer).toString('base64');
-      const mimeType = imageResponse.headers.get('content-type') || 'image/png';
-      console.log(`[${requestId}]   - Image size: ${imageBuffer.byteLength} bytes`);
-      console.log(`[${requestId}]   - MIME type: ${mimeType}`);
+    const resultImageUrl = await new Promise<string>(async (resolve, reject) => {
+      const maxAttempts = 60; // Poll for up to 60 attempts (60 seconds with 1 second intervals)
+      let attempts = 0;
 
-      const processingTime = Date.now() - startTime;
-      console.log(`[${requestId}] ========== SUCCESS ==========`);
-      console.log(`[${requestId}] Total processing time: ${processingTime}ms`);
-      console.log(`[${requestId}]   - Connect: ${connectDuration}ms`);
-      console.log(`[${requestId}]   - Predict: ${predictDuration}ms`);
-      console.log(`[${requestId}]   - Fetch: ${fetchDuration}ms`);
+      const pollQueue = async () => {
+        attempts++;
 
-      return NextResponse.json({
-        success: true,
-        image: `data:${mimeType};base64,${base64Image}`,
-        processingTime,
-      });
-    }
+        if (attempts > maxAttempts) {
+          reject(new Error('Queue processing timeout after 60 seconds'));
+          return;
+        }
 
-    console.error(`[${requestId}] ========== FAILURE: No result data ==========`);
-    console.error(`[${requestId}] Result object:`, JSON.stringify(result, null, 2));
-    return NextResponse.json(
-      {
-        error: 'No result generated',
-        message: 'The AI service did not return a valid image. Please try again.'
+        try {
+          console.log(`[${requestId}]   - Poll attempt ${attempts}/${maxAttempts}...`);
+          const response = await fetch(queueDataUrl, {
+            headers: {
+              'Accept': 'text/event-stream',
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`Queue polling failed with status ${response.status}`);
+          }
+
+          const text = await response.text();
+
+          // Parse Server-Sent Events format manually
+          const lines = text.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6); // Remove 'data: ' prefix
+              try {
+                const message = JSON.parse(data);
+                console.log(`[${requestId}]   - Queue message:`, message.msg);
+
+                if (message.msg === 'process_completed') {
+                  if (message.success && message.output && message.output.data && message.output.data.length > 0) {
+                    const resultData = message.output.data[0];
+                    if (resultData && resultData.url) {
+                      console.log(`[${requestId}]   - Process completed! Result URL: ${resultData.url}`);
+                      resolve(resultData.url);
+                      return;
+                    }
+                  }
+                  reject(new Error('Processing completed but no result data'));
+                  return;
+                } else if (message.msg === 'estimation') {
+                  console.log(`[${requestId}]   - Queue position: ${message.rank || 'unknown'} / ${message.queue_size || 'unknown'}`);
+                } else if (message.msg === 'process_starts') {
+                  console.log(`[${requestId}]   - Processing started...`);
+                }
+              } catch (err) {
+                // Ignore parse errors for heartbeat messages
+              }
+            }
+          }
+
+          // Continue polling
+          setTimeout(pollQueue, 1000);
+        } catch (error) {
+          console.error(`[${requestId}]   - Polling error:`, error);
+          setTimeout(pollQueue, 1000);
+        }
+      };
+
+      // Start polling
+      pollQueue();
+    });
+
+    console.log(`[${requestId}] Step 6: Downloading result image...`);
+    const fullImageUrl = resultImageUrl.startsWith('http') ? resultImageUrl : `${GRADIO_API_URL}${resultImageUrl}`;
+    console.log(`[${requestId}]   - Full URL: ${fullImageUrl}`);
+
+    const imageResponse = await retryWithBackoff(
+      async () => {
+        console.log(`[${requestId}]   - Fetching image...`);
+        const resp = await fetch(fullImageUrl);
+        if (!resp.ok) {
+          throw new Error(`Image fetch failed with status ${resp.status}`);
+        }
+        return resp;
       },
-      { status: 500 }
+      3,
+      1000
     );
+
+    console.log(`[${requestId}] Step 7: Converting to base64...`);
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    const mimeType = imageResponse.headers.get('content-type') || 'image/png';
+    console.log(`[${requestId}]   - Image size: ${imageBuffer.byteLength} bytes`);
+    console.log(`[${requestId}]   - MIME type: ${mimeType}`);
+
+    const processingTime = Date.now() - startTime;
+    console.log(`[${requestId}] ========== SUCCESS ==========`);
+    console.log(`[${requestId}] Total processing time: ${processingTime}ms`);
+
+    return NextResponse.json({
+      success: true,
+      image: `data:${mimeType};base64,${base64Image}`,
+      processingTime,
+    });
+
   } catch (error) {
     const processingTime = Date.now() - startTime;
     console.error(`[${requestId}] ========== ERROR ==========`);
@@ -214,8 +261,8 @@ export async function POST(request: NextRequest) {
       } else if (error.message.includes('connect') || error.message.includes('ECONNREFUSED')) {
         errorMessage = 'Unable to connect to the AI service. It may be temporarily unavailable.';
         errorType = 'connection';
-      } else if (error.message.includes('fetch')) {
-        errorMessage = 'Failed to retrieve the generated image. Please try again.';
+      } else if (error.message.includes('fetch') || error.message.includes('upload')) {
+        errorMessage = 'Failed to upload or retrieve images. Please try again.';
         errorType = 'fetch';
       }
     }
