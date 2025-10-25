@@ -80,6 +80,12 @@ export async function POST(request: NextRequest) {
         console.log(`[${requestId}]   - Attempting Gradio connection to Kwai-Kolors/Kolors-Virtual-Try-On...`);
         const c = await Client.connect("Kwai-Kolors/Kolors-Virtual-Try-On");
         console.log(`[${requestId}]   - Successfully connected to Gradio`);
+
+        // Log available endpoints to understand the API
+        console.log(`[${requestId}]   - Discovering available endpoints...`);
+        const endpoints = await c.view_api();
+        console.log(`[${requestId}]   - Available API endpoints:`, JSON.stringify(endpoints, null, 2));
+
         return c;
       },
       3,
@@ -88,26 +94,48 @@ export async function POST(request: NextRequest) {
     const connectDuration = Date.now() - connectStart;
     console.log(`[${requestId}] Step 5 completed in ${connectDuration}ms`);
 
-    // Call the predict method with the images and retry logic
+    // Call the submit method with the images and retry logic
+    // The Gradio API uses a queue-based system, so we use submit() instead of predict()
     console.log(`[${requestId}] Step 6: Sending images to AI model for processing...`);
     const predictStart = Date.now();
     const result = await retryWithBackoff(
       async () => {
-        console.log(`[${requestId}]   - Calling tryon function with all parameters...`);
+        console.log(`[${requestId}]   - Calling tryon function with submit API...`);
         // The Kolors Virtual Try-On expects 4 parameters:
         // 1. person_img (image)
         // 2. garment_img (image)
         // 3. seed (number, 0-999999)
         // 4. randomize_seed (boolean)
-        const res = await client.predict("/tryon", [
+
+        // Use submit() which returns a handle for queue-based processing
+        const handle = client.submit("/tryon", [
           personBlob,      // Parameter 1: person_img
           clothingBlob,    // Parameter 2: garment_img
           42,              // Parameter 3: seed (fixed seed for consistency)
           false            // Parameter 4: randomize_seed (false to use fixed seed)
-        ]) as GradioResponse;
+        ]);
+
+        console.log(`[${requestId}]   - Waiting for queue processing...`);
+
+        // Wait for the result using async iterator
+        let finalResult: GradioResponse | null = null;
+        for await (const message of handle) {
+          console.log(`[${requestId}]   - Queue message type: ${message.type}`);
+          if (message.type === 'data') {
+            finalResult = message as GradioResponse;
+            console.log(`[${requestId}]   - Received data from queue`);
+          } else if (message.type === 'status') {
+            console.log(`[${requestId}]   - Status update: ${JSON.stringify(message)}`);
+          }
+        }
+
+        if (!finalResult) {
+          throw new Error('No data received from queue');
+        }
+
         console.log(`[${requestId}]   - Prediction completed successfully`);
-        console.log(`[${requestId}]   - Response data structure:`, JSON.stringify(res, null, 2));
-        return res;
+        console.log(`[${requestId}]   - Response data structure:`, JSON.stringify(finalResult, null, 2));
+        return finalResult;
       },
       2,
       3000
