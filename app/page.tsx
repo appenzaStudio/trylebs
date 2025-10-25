@@ -234,6 +234,7 @@ export default function Home() {
               {t.result}
             </h3>
             <div className="max-w-2xl mx-auto">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={resultImage}
                 alt="Virtual try-on result"

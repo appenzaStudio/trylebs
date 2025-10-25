@@ -56,6 +56,7 @@ export default function ImageUpload({
     <div className="relative">
       {currentImage ? (
         <div className="relative group">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={currentImage}
             alt="Preview"

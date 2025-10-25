@@ -3,6 +3,10 @@ import { Client } from '@gradio/client';
 
 export const maxDuration = 60; // Maximum duration for serverless function
 
+interface GradioResponse {
+  data: unknown;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -30,10 +34,10 @@ export async function POST(request: NextRequest) {
     const result = await client.predict("/tryon", {
       person_img: personBlob,
       garment_img: clothingBlob,
-    });
+    }) as GradioResponse;
 
     // Extract the result image URL
-    if (result && result.data && result.data.length > 0) {
+    if (result && result.data && Array.isArray(result.data) && result.data.length > 0) {
       const resultImageUrl = result.data[0];
 
       // Fetch the result image and convert to base64
