@@ -93,12 +93,17 @@ export async function POST(request: NextRequest) {
     const predictStart = Date.now();
     const result = await retryWithBackoff(
       async () => {
-        console.log(`[${requestId}]   - Calling prediction endpoint with positional arguments...`);
-        // Use positional arguments as array instead of named parameters
-        // The Kolors Virtual Try-On expects: [person_image, garment_image]
+        console.log(`[${requestId}]   - Calling tryon function with all parameters...`);
+        // The Kolors Virtual Try-On expects 4 parameters:
+        // 1. person_img (image)
+        // 2. garment_img (image)
+        // 3. seed (number, 0-999999)
+        // 4. randomize_seed (boolean)
         const res = await client.predict("/tryon", [
-          personBlob,  // First parameter: person image
-          clothingBlob  // Second parameter: garment/clothing image
+          personBlob,      // Parameter 1: person_img
+          clothingBlob,    // Parameter 2: garment_img
+          42,              // Parameter 3: seed (fixed seed for consistency)
+          false            // Parameter 4: randomize_seed (false to use fixed seed)
         ]) as GradioResponse;
         console.log(`[${requestId}]   - Prediction completed successfully`);
         console.log(`[${requestId}]   - Response data structure:`, JSON.stringify(res, null, 2));
