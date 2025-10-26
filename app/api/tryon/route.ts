@@ -101,22 +101,38 @@ export async function POST(request: NextRequest) {
     const queueJoinResponse = await retryWithBackoff(
       async () => {
         console.log(`[${requestId}]   - Sending queue join request...`);
+
+        // Format image paths as Gradio expects them
+        const requestData = {
+          data: [
+            {
+              path: personImagePath,
+              url: `${GRADIO_API_URL}/file=${personImagePath}`,
+              orig_name: personImage.name,
+              size: personImage.size,
+            },
+            {
+              path: clothingImagePath,
+              url: `${GRADIO_API_URL}/file=${clothingImagePath}`,
+              orig_name: clothingImage.name,
+              size: clothingImage.size,
+            },
+            42,                   // Parameter 3: seed
+            false                 // Parameter 4: randomize_seed
+          ],
+          event_data: null,
+          fn_index: fnIndex,
+          session_hash: sessionHash,
+        };
+
+        console.log(`[${requestId}]   - Request data:`, JSON.stringify(requestData, null, 2));
+
         const resp = await fetch(`${GRADIO_API_URL}/queue/join?`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            data: [
-              personImagePath,      // Parameter 1: person_img
-              clothingImagePath,    // Parameter 2: garment_img
-              42,                   // Parameter 3: seed
-              false                 // Parameter 4: randomize_seed
-            ],
-            event_data: null,
-            fn_index: fnIndex,
-            session_hash: sessionHash,
-          }),
+          body: JSON.stringify(requestData),
         });
 
         if (!resp.ok) {
@@ -172,17 +188,38 @@ export async function POST(request: NextRequest) {
               const data = line.substring(6); // Remove 'data: ' prefix
               try {
                 const message = JSON.parse(data);
-                console.log(`[${requestId}]   - Queue message:`, message.msg);
+                console.log(`[${requestId}]   - Queue message:`, message.msg, message.success !== undefined ? `(success: ${message.success})` : '');
 
                 if (message.msg === 'process_completed') {
-                  if (message.success && message.output && message.output.data && message.output.data.length > 0) {
-                    const resultData = message.output.data[0];
-                    if (resultData && resultData.url) {
-                      console.log(`[${requestId}]   - Process completed! Result URL: ${resultData.url}`);
-                      resolve(resultData.url);
-                      return;
+                  console.log(`[${requestId}]   - Full completion message:`, JSON.stringify(message, null, 2));
+
+                  if (message.success && message.output && message.output.data) {
+                    console.log(`[${requestId}]   - Output data:`, JSON.stringify(message.output.data, null, 2));
+
+                    // The data could be in different formats
+                    const data = message.output.data;
+
+                    // Try different data structures
+                    if (Array.isArray(data) && data.length > 0) {
+                      const resultData = data[0];
+
+                      // Check if it's an object with url property
+                      if (resultData && typeof resultData === 'object' && 'url' in resultData) {
+                        console.log(`[${requestId}]   - Process completed! Result URL: ${resultData.url}`);
+                        resolve(resultData.url);
+                        return;
+                      }
+
+                      // Check if it's directly a URL string
+                      if (typeof resultData === 'string') {
+                        console.log(`[${requestId}]   - Process completed! Result URL: ${resultData}`);
+                        resolve(resultData);
+                        return;
+                      }
                     }
                   }
+
+                  console.error(`[${requestId}]   - Unexpected data format:`, JSON.stringify(message, null, 2));
                   reject(new Error('Processing completed but no result data'));
                   return;
                 } else if (message.msg === 'estimation') {
