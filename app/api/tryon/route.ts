@@ -102,21 +102,11 @@ export async function POST(request: NextRequest) {
       async () => {
         console.log(`[${requestId}]   - Sending queue join request...`);
 
-        // Format image paths as Gradio expects them
-        const requestData = {
+        // Try simple string paths first (simpler spaces expect this)
+        const requestDataSimple = {
           data: [
-            {
-              path: personImagePath,
-              url: `${GRADIO_API_URL}/file=${personImagePath}`,
-              orig_name: personImage.name,
-              size: personImage.size,
-            },
-            {
-              path: clothingImagePath,
-              url: `${GRADIO_API_URL}/file=${clothingImagePath}`,
-              orig_name: clothingImage.name,
-              size: clothingImage.size,
-            },
+            personImagePath,      // Just the path string
+            clothingImagePath,    // Just the path string
             42,                   // Parameter 3: seed
             false                 // Parameter 4: randomize_seed
           ],
@@ -125,14 +115,14 @@ export async function POST(request: NextRequest) {
           session_hash: sessionHash,
         };
 
-        console.log(`[${requestId}]   - Request data:`, JSON.stringify(requestData, null, 2));
+        console.log(`[${requestId}]   - Request data (simple paths):`, JSON.stringify(requestDataSimple, null, 2));
 
         const resp = await fetch(`${GRADIO_API_URL}/queue/join?`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(requestData),
+          body: JSON.stringify(requestDataSimple),
         });
 
         if (!resp.ok) {
@@ -180,9 +170,12 @@ export async function POST(request: NextRequest) {
           }
 
           const text = await response.text();
+          console.log(`[${requestId}]   - Raw SSE response (first 500 chars):`, text.substring(0, 500));
 
           // Parse Server-Sent Events format manually
           const lines = text.split('\n');
+          let hasCompletedMessage = false;
+
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               const data = line.substring(6); // Remove 'data: ' prefix
@@ -190,8 +183,20 @@ export async function POST(request: NextRequest) {
                 const message = JSON.parse(data);
                 console.log(`[${requestId}]   - Queue message:`, message.msg, message.success !== undefined ? `(success: ${message.success})` : '');
 
+                // Log all message types
+                if (message.msg === 'heartbeat') {
+                  continue; // Skip heartbeat messages
+                }
+
                 if (message.msg === 'process_completed') {
                   console.log(`[${requestId}]   - Full completion message:`, JSON.stringify(message, null, 2));
+
+                  // Check for error in output
+                  if (message.output && message.output.error) {
+                    console.error(`[${requestId}]   - API Error:`, message.output.error);
+                    reject(new Error(`API processing failed: ${message.output.error}`));
+                    return;
+                  }
 
                   if (message.success && message.output && message.output.data) {
                     console.log(`[${requestId}]   - Output data:`, JSON.stringify(message.output.data, null, 2));
